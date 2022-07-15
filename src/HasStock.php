@@ -48,6 +48,14 @@ trait HasStock
             ]);
         }
 
+        $warehouse = Arr::get($arguments, 'warehouse');
+        if ($warehouse) {
+            $mutations->where([
+                'warehouse_type' => $warehouse->getMorphClass(),
+                'warehouse_id' => $warehouse->getKey(),
+            ]);
+        }
+
         return (int)$mutations->sum('amount');
     }
 
@@ -79,6 +87,14 @@ trait HasStock
             ]);
         }
 
+        $warehouse = Arr::get($arguments, 'warehouse');
+        if ($warehouse) {
+            $mutations->where([
+                'warehouse_type' => $warehouse->getMorphClass(),
+                'warehouse_id' => $warehouse->getKey(),
+            ]);
+        }
+
         $mutations->delete();
 
         if (!is_null($newAmount)) {
@@ -90,8 +106,8 @@ trait HasStock
 
     public function moveBetweenStocks(int $amount, Warehouse $source, Warehouse $destination)
     {
-        $this->decreaseStock($amount, ['reference' => $source]);
-        $this->increaseStock($amount, ['reference' => $destination]);
+        $this->decreaseStock($amount, ['warehouse' => $source]);
+        $this->increaseStock($amount, ['warehouse' => $destination]);
         return true;
     }
 
@@ -126,6 +142,7 @@ trait HasStock
     protected function createStockMutation($amount, $arguments = [])
     {
         $reference = Arr::get($arguments, 'reference');
+        $warehouse = Arr::get($arguments, 'warehouse');
 
         $createArguments = collect([
             'amount' => $amount,
@@ -134,6 +151,10 @@ trait HasStock
             return $collection
                 ->put('reference_type', $reference->getMorphClass())
                 ->put('reference_id', $reference->getKey());
+        })->when($warehouse, function ($collection) use ($warehouse) {
+            return $collection
+                ->put('reference_type', $warehouse->getMorphClass())
+                ->put('reference_id', $warehouse->getKey());
         })->toArray();
 
         return $this->stockMutations()->create($createArguments);
@@ -145,22 +166,33 @@ trait HasStock
      |--------------------------------------------------------------------------
      */
 
-    public function scopeWhereInStock($query)
+    public function scopeWhereInStock($query, Warehouse $warehouse = null)
     {
-        return $query->where(function ($query) {
-            return $query->whereHas('stockMutations', function ($query) {
-                return $query->select('stockable_id')
+        return $query->where(function ($query) use ($warehouse) {
+            return $query->whereHas('stockMutations', function ($query) use ($warehouse) {
+                return $query
+                    ->select('stockable_id')
+                    ->when($warehouse, function ($query) use ($warehouse) {
+                        return $query
+                            ->where('warehouse_type', $warehouse->getMorphClass())
+                            ->where('warehouse_id', $warehouse->getKey());
+                    })
                     ->groupBy('stockable_id')
                     ->havingRaw('SUM(amount) > 0');
             });
         });
     }
 
-    public function scopeWhereOutOfStock($query)
+    public function scopeWhereOutOfStock($query, Warehouse $warehouse = null)
     {
-        return $query->where(function ($query) {
-            return $query->whereHas('stockMutations', function ($query) {
+        return $query->where(function ($query) use ($warehouse) {
+            return $query->whereHas('stockMutations', function ($query) use ($warehouse) {
                 return $query->select('stockable_id')
+                    ->when($warehouse, function ($query) use ($warehouse) {
+                        return $query
+                            ->where('warehouse_type', $warehouse->getMorphClass())
+                            ->where('warehouse_id', $warehouse->getKey());
+                    })
                     ->groupBy('stockable_id')
                     ->havingRaw('SUM(amount) <= 0');
             })->orWhereDoesntHave('stockMutations');
