@@ -30,17 +30,24 @@ trait HasStock
      |--------------------------------------------------------------------------
      */
 
-    public function stock($date = null)
+    public function stock($date = null, $warehouse = null)
     {
         $date = $date ?: Carbon::now();
 
-        if (! $date instanceof DateTimeInterface) {
+        if (!$date instanceof DateTimeInterface) {
             $date = Carbon::create($date);
         }
 
-        return (int) $this->stockMutations()
-            ->where('created_at', '<=', $date->format('Y-m-d H:i:s'))
-            ->sum('amount');
+        $mutations = $this->stockMutations()->where('created_at', '<=', $date->format('Y-m-d H:i:s'));
+
+        if ($warehouse !== null) {
+            $mutations->where([
+                'reference_type' => get_class($warehouse),
+                'reference_id' => $warehouse->id,
+            ]);
+        }
+
+        return (int)$mutations->sum('amount');
     }
 
     public function increaseStock($amount = 1, $arguments = [])
@@ -62,7 +69,7 @@ trait HasStock
     {
         $this->stockMutations()->delete();
 
-        if (! is_null($newAmount)) {
+        if (!is_null($newAmount)) {
             $this->createStockMutation($newAmount, $arguments);
         }
 
@@ -91,8 +98,8 @@ trait HasStock
     /**
      * Function to handle mutations (increase, decrease).
      *
-     * @param  int $amount
-     * @param  array  $arguments
+     * @param int $amount
+     * @param array $arguments
      * @return bool
      */
     protected function createStockMutation($amount, $arguments = [])

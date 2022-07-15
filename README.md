@@ -72,6 +72,17 @@ Get the current stock value (on a certain date).
 ```php
 $book->stock;
 $book->stock(Carbon::now()->subDays(10));
+$book->stock(Carbon::now()->subDays(10), Warehouse::find(1));
+```
+
+
+### Current stock in specific warehouse
+
+Get the current stock value (on a certain date) in specific warehouse.
+
+```php
+$book->stock(null, Warehouse::find(1));
+$book->stock(Carbon::now()->subDays(10), Warehouse::find(1));
 ```
 
 ### Stock arguments
