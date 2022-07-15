@@ -30,13 +30,24 @@ class Book extends Model
 }
 ```
 
+Your warehouse model has to implement `Warehouse` interface.
+``` php
+use Appstract\Stock\Warehouse
+
+class Library extends Model implements Warehouse
+{
+    
+}
+
+```
+
 ### Basic mutations
 
 ```php
-$book->increaseStock(10);
-$book->decreaseStock(10);
-$book->mutateStock(10);
-$book->mutateStock(-10);
+$book->increaseStock(10, ['warehouse' => $warehouse_first]);
+$book->decreaseStock(10, ['warehouse' => $warehouse_first]);
+$book->mutateStock(10, ['warehouse' => $warehouse_first]);
+$book->mutateStock(-10, ['warehouse' => $warehouse_first]);
 ```
 
 ### Clearing stock
@@ -45,7 +56,7 @@ It's also possible to clear the stock and directly setting a new value.
 
 ```php
 $book->clearStock();
-$book->clearStock(10);
+$book->clearStock(10, ['warehouse' => $warehouse_first]);
 ```
 
 ### Setting stock
@@ -53,7 +64,7 @@ $book->clearStock(10);
 It is possible to set stock. This will create a new mutation with the difference between the old and new value.
 
 ```php
-$book->setStock(10);
+$book->setStock(10, ['warehouse' => $warehouse_first]);
 ```
 
 ### Check if model is in stock
@@ -61,13 +72,14 @@ $book->setStock(10);
 It's also possible to check if a product is in stock (with a minimal value).
 
 ```php
-$book->inStock();
+$book->inStock(); // anywhere
 $book->inStock(10);
+$book->inStock(10, ['warehouse' => $warehouse_first]);
 ```
 
 ### Current stock
 
-Get the current stock value (on a certain date).
+Get the current stock value (on a certain date) - all warehouses.
 
 ```php
 $book->stock;
@@ -75,21 +87,22 @@ $book->stock(Carbon::now()->subDays(10));
 ```
 
 
+
 ### Current stock in specific warehouse
 
 Get the current stock value (on a certain date) in specific warehouse.
 
 ```php
-$book->stock(null, ['reference' => Warehouse::find(1)]);
-$book->stock(Carbon::now()->subDays(10), ['reference' => Warehouse::find(1)]);
+$book->stock(null, ['warehouse' =>$warehouse_first]);
+$book->stock(Carbon::now()->subDays(10), ['warehouse' =>$warehouse_first]);
 ```
 
 ### Move between warehouses
 
-Get the current stock value (on a certain date) in specific warehouse.
+Move amount from source warehouse to destination warehouse.
 
 ```php
-$book->moveBetweenStocks(5, Warehouse::find(1), Warehouse::find(2));
+$book->moveBetweenStocks(5,$warehouse_first, $warehouse_second);
 ```
 
 ### Stock arguments
@@ -98,8 +111,9 @@ Add a description and/or reference model to de StockMutation.
 
 ```php
 $book->increaseStock(10, [
+    'warehouse' => $warehouse_first,
     'description' => 'This is a description',
-    'reference' => $otherModel,
+    'reference' => $otherModel, // example Order, PurchaseOrder, etc.
 ]);
 ```
 
@@ -109,7 +123,9 @@ It is also possible to query based on stock.
 
 ```php
 Book::whereInStock()->get();
+Book::whereInStock($warehouse_first)->get();
 Book::whereOutOfStock()->get();
+Book::whereOutOfStock($warehouse_first)->get();
 ```
 
 ## Testing
