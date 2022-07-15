@@ -30,7 +30,7 @@ trait HasStock
      |--------------------------------------------------------------------------
      */
 
-    public function stock($date = null, $warehouse = null)
+    public function stock($date = null, $arguments = [])
     {
         $date = $date ?: Carbon::now();
 
@@ -39,11 +39,12 @@ trait HasStock
         }
 
         $mutations = $this->stockMutations()->where('created_at', '<=', $date->format('Y-m-d H:i:s'));
+        $reference = Arr::get($arguments, 'reference');
 
-        if ($warehouse !== null) {
+        if ($reference) {
             $mutations->where([
-                'reference_type' => get_class($warehouse),
-                'reference_id' => $warehouse->id,
+                'reference_type' => $reference->getMorphClass(),
+                'reference_id' => $reference->getKey(),
             ]);
         }
 
@@ -67,7 +68,18 @@ trait HasStock
 
     public function clearStock($newAmount = null, $arguments = [])
     {
-        $this->stockMutations()->delete();
+        $reference = Arr::get($arguments, 'reference');
+
+        $mutations = $this->stockMutations();
+
+        if ($reference) {
+            $mutations->where([
+                'reference_type' => $reference->getMorphClass(),
+                'reference_id' => $reference->getKey(),
+            ]);
+        }
+
+        $mutations->delete();
 
         if (!is_null($newAmount)) {
             $this->createStockMutation($newAmount, $arguments);
@@ -76,23 +88,32 @@ trait HasStock
         return true;
     }
 
+    public function moveBetweenStocks($amount = 1, Warehouse $source, Warehouse $destination)
+    {
+        $this->decreaseStock($amount, ['reference' => $source]);
+        $this->increaseStock($amount, ['reference' => $destination]);
+        return true;
+    }
+
     public function setStock($newAmount, $arguments = [])
     {
-        $currentStock = $this->stock;
+        $currentStock = $this->stock(null, $arguments);
 
         if ($deltaStock = $newAmount - $currentStock) {
             return $this->createStockMutation($deltaStock, $arguments);
         }
     }
 
-    public function inStock($amount = 1)
+    public function inStock($amount = 1, $arguments = [])
     {
-        return $this->stock > 0 && $this->stock >= $amount;
+        $currentStock = $this->stock(null, $arguments);
+        return $currentStock > 0 && $currentStock >= $amount;
     }
 
-    public function outOfStock()
+    public function outOfStock($arguments = [])
     {
-        return $this->stock <= 0;
+        $currentStock = $this->stock(null, $arguments);
+        return $currentStock <= 0;
     }
 
     /**
