@@ -11,6 +11,8 @@ class StockMutation extends Model
         'stockable_id',
         'reference_type',
         'reference_id',
+        'warehouse_type',
+        'warehouse_id',
         'amount',
         'description',
     ];
@@ -41,6 +43,16 @@ class StockMutation extends Model
      * @return \Illuminate\Database\Eloquent\Relations\MorphTo
      */
     public function reference()
+    {
+        return $this->morphTo();
+    }
+
+    /**
+     * Relation.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
+     */
+    public function warehouse()
     {
         return $this->morphTo();
     }
