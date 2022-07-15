@@ -88,7 +88,7 @@ trait HasStock
         return true;
     }
 
-    public function moveBetweenStocks($amount = 1, Warehouse $source, Warehouse $destination)
+    public function moveBetweenStocks(int $amount, Warehouse $source, Warehouse $destination)
     {
         $this->decreaseStock($amount, ['reference' => $source]);
         $this->increaseStock($amount, ['reference' => $destination]);
