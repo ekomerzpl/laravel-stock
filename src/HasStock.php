@@ -40,6 +40,7 @@ trait HasStock
 
         $mutations = $this->stockMutations()->where('created_at', '<=', $date->format('Y-m-d H:i:s'));
         $reference = Arr::get($arguments, 'reference');
+        $warehouse = Arr::get($arguments, 'warehouse');
 
         if ($reference) {
             $mutations->where([
@@ -48,7 +49,6 @@ trait HasStock
             ]);
         }
 
-        $warehouse = Arr::get($arguments, 'warehouse');
         if ($warehouse) {
             $mutations->where([
                 'warehouse_type' => $warehouse->getMorphClass(),
@@ -77,6 +77,7 @@ trait HasStock
     public function clearStock($newAmount = null, $arguments = [])
     {
         $reference = Arr::get($arguments, 'reference');
+        $warehouse = Arr::get($arguments, 'warehouse');
 
         $mutations = $this->stockMutations();
 
@@ -87,7 +88,6 @@ trait HasStock
             ]);
         }
 
-        $warehouse = Arr::get($arguments, 'warehouse');
         if ($warehouse) {
             $mutations->where([
                 'warehouse_type' => $warehouse->getMorphClass(),
@@ -153,8 +153,8 @@ trait HasStock
                 ->put('reference_id', $reference->getKey());
         })->when($warehouse, function ($collection) use ($warehouse) {
             return $collection
-                ->put('reference_type', $warehouse->getMorphClass())
-                ->put('reference_id', $warehouse->getKey());
+                ->put('warehouse_type', $warehouse->getMorphClass())
+                ->put('warehouse_id', $warehouse->getKey());
         })->toArray();
 
         return $this->stockMutations()->create($createArguments);
