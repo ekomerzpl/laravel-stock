@@ -24,7 +24,7 @@ class StockMutation extends Model
     {
         parent::__construct($attributes);
 
-        $this->setTable(config('stock.table', 'stock_mutations'));
+        $this->setTable(config('stock.tables.mutations', 'stock_mutations'));
     }
 
     /**

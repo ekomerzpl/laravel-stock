@@ -4,6 +4,7 @@ namespace Appstract\Stock\Traits;
 
 use Appstract\Stock\Models\StockMutation;
 
+
 trait HasWarehouseStock
 {
     public function stockMutations()
@@ -49,7 +50,6 @@ trait HasWarehouseStock
     {
         $this->stock += $quantity;
         $this->save();
-
         $this->stockMutations()->create([
             'quantity' => $quantity,
             'type' => 'increase',

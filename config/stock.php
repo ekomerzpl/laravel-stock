@@ -4,6 +4,7 @@ return [
 
     'tables' => [
         'mutations' => 'stock_mutations',
+        'purchase_prices' => 'stock_purchase_prices',
     ],
     'models' => [
         'purchase_price' => \Appstract\Stock\Models\PurchasePrice::class,

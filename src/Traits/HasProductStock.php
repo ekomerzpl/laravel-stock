@@ -8,7 +8,7 @@ trait HasProductStock
 {
     public function stockMutations()
     {
-        return $this->hasMany(StockMutation::class);
+        return $this->morphMany(StockMutation::class, 'stockable');
     }
 
     public function getTotalStock()

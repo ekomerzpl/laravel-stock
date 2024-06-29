@@ -6,7 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class PurchasePrice extends Model
 {
-
+    public function __construct(array $attributes = [])
+    {
+        parent::__construct($attributes);
+        $this->setTable(config('stock.tables.purchase_prices', 'stock_purchase_prices'));
+    }
     protected $fillable = [
         'product_id',
         'supplier_id',
