@@ -13,7 +13,7 @@ class ModifyStockMutationsTable extends Migration
             $table->unsignedBigInteger('warehouse_id')->nullable(false)->change();
 
             $table->unsignedBigInteger('product_id')->after('id');
-            $table->string('type')->after('quantity');
+            $table->string('type')->after('amount');
             $table->unsignedBigInteger('from_warehouse_id')->nullable()->after('warehouse_id');
             $table->unsignedBigInteger('to_warehouse_id')->nullable()->after('from_warehouse_id');
             $table->unsignedBigInteger('purchase_price_id')->nullable()->after('to_warehouse_id');

@@ -9,11 +9,11 @@ class CreateStockPurchasePricesTable extends Migration
     public function up()
     {
         Schema::create(config('stock.tables.purchase_prices'), function (Blueprint $table) {
-                $table->id();
-                $table->foreignId('product_id')->constrained()->onDelete('cascade');
-                $table->foreignId('supplier_id')->constrained()->onDelete('cascade');
-                $table->decimal('price', 8, 2);
-                $table->timestamps();
+            $table->id();
+            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('supplier_id');
+            $table->decimal('price', 8, 2);
+            $table->timestamps();
         });
     }
 
