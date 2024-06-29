@@ -1,7 +1,9 @@
 <?php
 
-namespace Appstract\Stock;
+namespace Appstract\Stock\Traits;
 
+use Appstract\Stock\Interfaces\Warehouse;
+use Appstract\Stock\Models\StockMutation;
 use DateTimeInterface;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;

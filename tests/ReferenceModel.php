@@ -2,7 +2,7 @@
 
 namespace Appstract\Stock\Tests;
 
-use Appstract\Stock\ReferencedByStockMutations;
+use Appstract\Stock\Traits\ReferencedByStockMutations;
 use Illuminate\Database\Eloquent\Model;
 
 class ReferenceModel extends Model

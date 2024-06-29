@@ -2,7 +2,7 @@
 
 namespace Appstract\Stock\Tests;
 
-use Appstract\Stock\HasStock;
+use Appstract\Stock\Traits\HasStock;
 use Illuminate\Database\Eloquent\Model;
 
 class StockModel extends Model

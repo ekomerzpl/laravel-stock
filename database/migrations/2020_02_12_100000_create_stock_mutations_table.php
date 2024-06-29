@@ -13,7 +13,7 @@ class CreateStockMutationsTable extends Migration
      */
     public function up()
     {
-        Schema::create(config('stock.table'), function (Blueprint $table) {
+        Schema::create(config('stock.tables.mutations'), function (Blueprint $table) {
             $table->increments('id');
             $table->morphs('stockable');
             $table->string('reference_type')->nullable();
@@ -36,6 +36,6 @@ class CreateStockMutationsTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists(config('stock.table'));
+        Schema::dropIfExists(config('stock.tables.mutations'));
     }
 }

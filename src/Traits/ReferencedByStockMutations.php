@@ -1,6 +1,8 @@
 <?php
 
-namespace Appstract\Stock;
+namespace Appstract\Stock\Traits;
+
+use Appstract\Stock\Models\StockMutation;
 
 trait ReferencedByStockMutations
 {
