@@ -70,10 +70,6 @@ trait HasWarehouseStock
             $availableQuantity = $mutation->quantity;
             $decreaseQuantity = min($availableQuantity, $remainingQuantity);
 
-            // Zmniejsz ilość w obecnej mutacji
-            $mutation->quantity -= $decreaseQuantity;
-            $mutation->save();
-
             // Twórz nową mutację ze zmniejszoną ilością
             $this->createStockMutation($productId, -$decreaseQuantity, $mutation->purchase_price_id);
 

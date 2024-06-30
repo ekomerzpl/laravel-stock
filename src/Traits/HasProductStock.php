@@ -53,14 +53,13 @@ trait HasProductStock
         return $this->createStockMutation($quantity, $warehouseId, $purchasePriceId);
     }
 
-    public function decreaseStock($quantity, $warehouseId): void
+    public function decreaseStock($quantity, $warehouseId = 1): void
     {
         $order = config('stock.inventory_method', 'FIFO');
 
         $remainingQuantity = $quantity;
 
         $mutations = $this->stockMutations()
-            ->where('product_id', $this->id)
             ->where('to_warehouse_id', $warehouseId)
             ->where('quantity', '>', 0)
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
@@ -96,7 +95,6 @@ trait HasProductStock
         $remainingQuantity = $quantity;
 
         $mutations = $this->stockMutations()
-            ->where('product_id', $this->id)
             ->where('quantity', '>', 0)
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
             ->get();
@@ -108,10 +106,6 @@ trait HasProductStock
 
             $availableQuantity = $mutation->quantity;
             $transferQuantity = min($availableQuantity, $remainingQuantity);
-
-            // Zmniejsz ilość w obecnej mutacji
-            $mutation->quantity -= $transferQuantity;
-            $mutation->save();
 
             // Twórz nową mutację dla magazynu docelowego
             $this->createStockMutation($transferQuantity, $toWarehouseId, $mutation->purchase_price_id);
