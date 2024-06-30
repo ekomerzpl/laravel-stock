@@ -9,7 +9,7 @@ trait HasWarehouseStock
 {
     public function stockMutations()
     {
-        return $this->hasMany(StockMutation::class);
+        return $this->morphMany(StockMutation::class, 'warehouse');
     }
 
     public function getProductStock($productId)
@@ -46,81 +46,73 @@ trait HasWarehouseStock
             ->get();
     }
 
-    public function increaseStock($quantity, $purchasePriceId = null): void
+    public function increaseStock($productId, $quantity, $purchasePriceId = null)
     {
-        $this->stock += $quantity;
-        $this->save();
-        $this->stockMutations()->create([
-            'quantity' => $quantity,
-            'type' => 'increase',
-            'purchase_price_id' => $purchasePriceId,
-        ]);
+        return $this->createStockMutation($productId, $quantity, $purchasePriceId);
     }
 
-    public function decreaseStock($quantity, $purchasePriceId = null): void
+    public function decreaseStock($productId, $quantity)
     {
-        $this->stock -= $quantity;
-        $this->save();
-
-        $this->stockMutations()->create([
-            'quantity' => $quantity,
-            'type' => 'decrease',
-            'purchase_price_id' => $purchasePriceId,
-        ]);
-    }
-
-    public function transferStock($productId, $quantity, $toWarehouse)
-    {
-        $inventoryMethod = config('stock.inventory_method', 'FIFO');
-
-        $query = $this->stockMutations()
-            ->where('product_id', $productId)
-            ->where('type', 'increase')
-            ->where('quantity', '>', 0);
-
-        if ($inventoryMethod === 'LIFO') {
-            $query->orderBy('created_at', 'desc'); // LIFO (last-in, first-out)
-        } else {
-            $query->orderBy('created_at', 'asc'); // FIFO (first-in, first-out)
-        }
-
-        $stockMutations = $query->get();
+        $order = config('stock.inventory_method', 'FIFO');
         $remainingQuantity = $quantity;
 
-        foreach ($stockMutations as $mutation) {
+        $mutations = $this->stockMutations()
+            ->where('product_id', $productId)
+            ->where('quantity', '>', 0)
+            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
+            ->get();
+
+        foreach ($mutations as $mutation) {
             if ($remainingQuantity <= 0) {
                 break;
             }
 
-            $transferQuantity = min($mutation->quantity, $remainingQuantity);
+            $availableQuantity = $mutation->quantity;
+            $decreaseQuantity = min($availableQuantity, $remainingQuantity);
 
-            // Zmniejszenie stanu magazynowego w magazynie źródłowym
-            $this->decreaseStock($transferQuantity, $mutation->purchase_price_id);
+            // Zmniejsz ilość w obecnej mutacji
+            $mutation->quantity -= $decreaseQuantity;
+            $mutation->save();
 
-            // Zwiększenie stanu magazynowego w magazynie docelowym
-            $toWarehouse->increaseStock($transferQuantity, $mutation->purchase_price_id);
+            // Twórz nową mutację ze zmniejszoną ilością
+            $this->createStockMutation($productId, -$decreaseQuantity, $mutation->purchase_price_id);
 
-            // Tworzenie rekordu dla zmniejszenia stanu magazynowego w magazynie źródłowym
-            $this->stockMutations()->create([
-                'product_id' => $productId,
-                'warehouse_id' => $this->getId(),
-                'quantity' => -$transferQuantity, // Ujemna ilość oznacza zmniejszenie
-                'type' => 'transfer',
-                'from_warehouse_id' => $this->getId(),
-                'to_warehouse_id' => $toWarehouse->getId(),
-                'purchase_price_id' => $mutation->purchase_price_id,
-            ]);
+            $remainingQuantity -= $decreaseQuantity;
+        }
 
-            // Tworzenie rekordu dla zwiększenia stanu magazynowego w magazynie docelowym
-            $toWarehouse->stockMutations()->create([
-                'product_id' => $productId,
-                'warehouse_id' => $toWarehouse->getId(),
-                'quantity' => $transferQuantity, // Dodatnia ilość oznacza zwiększenie
-                'type' => 'transfer',
-                'from_warehouse_id' => $this->getId(),
-                'to_warehouse_id' => $toWarehouse->getId(),
-                'purchase_price_id' => $mutation->purchase_price_id,
-            ]);
+        if ($remainingQuantity > 0) {
+            throw new \Exception('Not enough stock to decrease.');
+        }
+    }
+
+    public function transferStock($productId, $toWarehouse, $quantity)
+    {
+        $order = config('stock.inventory_method', 'FIFO');
+        $remainingQuantity = $quantity;
+
+        $mutations = $this->stockMutations()
+            ->where('product_id', $productId)
+            ->where('quantity', '>', 0)
+            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
+            ->get();
+
+        foreach ($mutations as $mutation) {
+            if ($remainingQuantity <= 0) {
+                break;
+            }
+
+            $availableQuantity = $mutation->quantity;
+            $transferQuantity = min($availableQuantity, $remainingQuantity);
+
+            // Zmniejsz ilość w obecnej mutacji
+            $mutation->quantity -= $transferQuantity;
+            $mutation->save();
+
+            // Twórz nową mutację dla magazynu docelowego
+            $toWarehouse->createStockMutation($productId, $transferQuantity, $mutation->purchase_price_id);
+
+            // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
+            $this->createStockMutation($productId, -$transferQuantity, $mutation->purchase_price_id);
 
             $remainingQuantity -= $transferQuantity;
         }
@@ -128,5 +120,14 @@ trait HasWarehouseStock
         if ($remainingQuantity > 0) {
             throw new \Exception('Not enough stock to transfer.');
         }
+    }
+
+    protected function createStockMutation($productId, $quantity, $purchasePriceId = null)
+    {
+        return $this->stockMutations()->create([
+            'product_id' => $productId,
+            'quantity' => $quantity,
+            'purchase_price_id' => $purchasePriceId,
+        ]);
     }
 }
