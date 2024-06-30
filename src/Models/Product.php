@@ -2,9 +2,11 @@
 
 namespace Appstract\Stock\Models;
 
+use Appstract\Stock\Exceptions\StockException;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Appstract\Stock\Interfaces\Product as ProductInterface;
+use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
 use Illuminate\Support\Arr;
 
 class Product extends Model implements ProductInterface
@@ -62,14 +64,14 @@ class Product extends Model implements ProductInterface
         return $this->createStockMutation($quantity, $warehouseId, $purchasePriceId);
     }
 
-    public function decreaseStock($quantity, $warehouseId = 1): void
+    public function decreaseStock($quantity, WarehouseInterface $warehouse_to): void
     {
         $order = config('stock.inventory_method', 'FIFO');
 
         $remainingQuantity = $quantity;
 
         $mutations = $this->stockMutations()
-            ->where('to_warehouse_id', $warehouseId)
+            ->where('to_warehouse_id', $warehouse_to->getId())
             ->where('quantity', '>', 0)
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
             ->get();
@@ -83,24 +85,29 @@ class Product extends Model implements ProductInterface
             $decreaseQuantity = min($availableQuantity, $remainingQuantity);
 
             // Twórz nową mutację ze zmniejszoną ilością
-            $this->createStockMutation(-$decreaseQuantity, $warehouseId, $mutation->purchase_price_id);
+            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $mutation->purchase_price_id);
 
             $remainingQuantity -= $decreaseQuantity;
         }
 
         if ($remainingQuantity > 0) {
-            throw new \Exception('Not enough stock to decrease.');
+            throw new StockException('Not enough stock to decrease.');
         }
     }
 
-    public function transferStock($toWarehouseId, $quantity): void
+    public function transferStock(WarehouseInterface $warehouse_from, WarehouseInterface $warehouse_to, $quantity): void
     {
+
+        if ($this->stock(null, ['warehouse' => $warehouse_from]) < $quantity) {
+            throw new StockException('Not enough stock to transfer.');
+        }
 
         $order = config('stock.inventory_method', 'FIFO');
         $remainingQuantity = $quantity;
 
         $mutations = $this->stockMutations()
             ->where('quantity', '>', 0)
+            ->where('to_warehouse_id', $warehouse_from->getId())
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
             ->get();
 
@@ -113,16 +120,16 @@ class Product extends Model implements ProductInterface
             $transferQuantity = min($availableQuantity, $remainingQuantity);
 
             // Twórz nową mutację dla magazynu docelowego
-            $this->createStockMutation($transferQuantity, $toWarehouseId, $mutation->purchase_price_id);
+            $this->createStockMutation($transferQuantity, $warehouse_to, $mutation->purchase_price_id);
 
             // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
-            $this->createStockMutation(-$transferQuantity, $mutation->to_warehouse_id, $mutation->purchase_price_id);
+            $this->createStockMutation(-$transferQuantity, $warehouse_from, $mutation->purchase_price_id);
 
             $remainingQuantity -= $transferQuantity;
         }
 
         if ($remainingQuantity > 0) {
-            throw new \Exception('Not enough stock to transfer.');
+            throw new StockException('Not enough stock to transfer.');
         }
     }
 
@@ -136,25 +143,25 @@ class Product extends Model implements ProductInterface
         ]);
 
         $this->increaseStock($attributes['quantity'], $attributes['to_warehouse_id'], $purchasePrice->id);
-        $this->updateAveragePurchasePrice();
+
         return $purchasePrice;
     }
 
-    protected function createStockMutation($quantity, $warehouseId, $purchasePriceId = null)
+    protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null)
     {
         return $this->stockMutations()->create([
             'quantity' => $quantity,
             'type' => $quantity > 0 ? 'add' : 'subtract',
-            'to_warehouse_id' => $warehouseId,
+            'to_warehouse_id' => $warehouse_to->getId(),
             'purchase_price_id' => $purchasePriceId,
             'stockable_id' => $this->id,
-            'stockable_type' => $this->getMorphClass(),
+            'stockable_type' => self::class,
         ]);
     }
 
     public function getLowStockThresholdAttribute(): int
     {
-        return 0;
+        return 10; // Próg niskiego stanu magazynowego
     }
 
     public function isLowStock(): bool
@@ -193,7 +200,7 @@ class Product extends Model implements ProductInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws StockException
      */
     public function batchDecreaseStock($items): void
     {
@@ -205,7 +212,7 @@ class Product extends Model implements ProductInterface
     }
 
     /**
-     * @throws \Exception
+     * @throws StockException
      */
     public function batchTransferStock($items, $toWarehouseId): void
     {

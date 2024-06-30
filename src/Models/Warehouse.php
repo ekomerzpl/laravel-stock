@@ -2,6 +2,7 @@
 
 namespace Appstract\Stock\Models;
 
+use Appstract\Stock\Exceptions\StockException;
 use Appstract\Stock\Interfaces\Product as ProductInterface;
 use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -87,7 +88,7 @@ class Warehouse extends Model implements WarehouseInterface
         }
 
         if ($remainingQuantity > 0) {
-            throw new \Exception('Not enough stock to decrease.');
+            throw new StockException('Not enough stock to decrease.');
         }
     }
 
@@ -125,7 +126,7 @@ class Warehouse extends Model implements WarehouseInterface
         }
 
         if ($remainingQuantity > 0) {
-            throw new \Exception('Not enough stock to transfer.');
+            throw new StockException('Not enough stock to transfer.');
         }
     }
 
