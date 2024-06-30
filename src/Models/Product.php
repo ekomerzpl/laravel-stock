@@ -2,9 +2,9 @@
 
 namespace Appstract\Stock\Models;
 
-use Appstract\Stock\Exceptions\StockException;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Appstract\Stock\Exceptions\StockException;
 use Appstract\Stock\Interfaces\Product as ProductInterface;
 use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
 use Illuminate\Support\Arr;
@@ -59,33 +59,38 @@ class Product extends Model implements ProductInterface
         return (int)$mutations->sum('quantity');
     }
 
-    public function increaseStock($quantity, $warehouseId, $purchasePriceId = null)
+    public function increaseStock($quantity, WarehouseInterface $warehouse, $purchasePriceId = null)
     {
-        return $this->createStockMutation($quantity, $warehouseId, $purchasePriceId);
+        return $this->createStockMutation($quantity, $warehouse, $purchasePriceId);
     }
 
     public function decreaseStock($quantity, WarehouseInterface $warehouse_to): void
     {
+        if ($this->stock(null, ['warehouse' => $warehouse_to]) < $quantity) {
+            throw new StockException('Not enough stock to decrease.');
+        }
+
         $order = config('stock.inventory_method', 'FIFO');
 
         $remainingQuantity = $quantity;
 
-        $mutations = $this->stockMutations()
-            ->where('to_warehouse_id', $warehouse_to->getId())
-            ->where('quantity', '>', 0)
-            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
-            ->get();
+        // Pobierz aktualny stan magazynowy
+        $currentStock = $warehouse_to->getProductStockPrices($this);
 
-        foreach ($mutations as $mutation) {
+        // Sortuj zgodnie z metodą FIFO/LIFO
+        if ($order === 'LIFO') {
+            $currentStock = array_reverse($currentStock);
+        }
+
+        foreach ($currentStock as $stock) {
             if ($remainingQuantity <= 0) {
                 break;
             }
 
-            $availableQuantity = $mutation->quantity;
+            $availableQuantity = $stock['quantity'];
             $decreaseQuantity = min($availableQuantity, $remainingQuantity);
 
-            // Twórz nową mutację ze zmniejszoną ilością
-            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $mutation->purchase_price_id);
+            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $stock['purchase_price_id']);
 
             $remainingQuantity -= $decreaseQuantity;
         }
@@ -142,7 +147,7 @@ class Product extends Model implements ProductInterface
             'price' => $attributes['price'],
         ]);
 
-        $this->increaseStock($attributes['quantity'], $attributes['to_warehouse_id'], $purchasePrice->id);
+        $this->increaseStock($attributes['quantity'], $attributes['to_warehouse'], $purchasePrice->id);
 
         return $purchasePrice;
     }
@@ -214,12 +219,12 @@ class Product extends Model implements ProductInterface
     /**
      * @throws StockException
      */
-    public function batchTransferStock($items, $toWarehouseId): void
+    public function batchTransferStock($items, WarehouseInterface $warehouse_to): void
     {
         $order = config('stock.inventory_method', 'FIFO');
 
         foreach ($items as $item) {
-            $this->transferStock($toWarehouseId, $item['quantity'], $order);
+            $this->transferStock($warehouse_to, $item['quantity'], $order);
         }
     }
 

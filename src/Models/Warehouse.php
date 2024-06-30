@@ -23,13 +23,6 @@ class Warehouse extends Model implements WarehouseInterface
         return $this->hasMany(StockMutation::class, 'to_warehouse_id');
     }
 
-    public function getProductStock($productId)
-    {
-        return $this->stockMutations()
-            ->where('stockable_id', $productId)
-            ->sum('quantity');
-    }
-
     public function getProductsInStock()
     {
         return $this->stockMutations()
@@ -57,88 +50,6 @@ class Warehouse extends Model implements WarehouseInterface
             ->get();
     }
 
-    public function increaseStock($productId, $quantity, $purchasePriceId = null)
-    {
-        return $this->createStockMutation($productId, $quantity, $purchasePriceId);
-    }
-
-    public function decreaseStock($productId, $quantity): void
-    {
-        $order = config('stock.inventory_method', 'FIFO');
-        $remainingQuantity = $quantity;
-
-        $mutations = $this->stockMutations()
-            ->where('product_id', $productId)
-            ->where('quantity', '>', 0)
-            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
-            ->get();
-
-        foreach ($mutations as $mutation) {
-            if ($remainingQuantity <= 0) {
-                break;
-            }
-
-            $availableQuantity = $mutation->quantity;
-            $decreaseQuantity = min($availableQuantity, $remainingQuantity);
-
-            // Twórz nową mutację ze zmniejszoną ilością
-            $this->createStockMutation($productId, -$decreaseQuantity, $mutation->purchase_price_id);
-
-            $remainingQuantity -= $decreaseQuantity;
-        }
-
-        if ($remainingQuantity > 0) {
-            throw new StockException('Not enough stock to decrease.');
-        }
-    }
-
-    public function transferStock(ProductInterface $stockable, $toWarehouse, $quantity)
-    {
-        $order = config('stock.inventory_method', 'FIFO');
-        $remainingQuantity = $quantity;
-
-        $mutations = $this->stockMutations()
-            ->where('stockable_id', $stockable->getId())
-            ->where('stockable_type', $stockable->getMorphClass())
-            ->where('quantity', '>', 0)
-            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
-            ->get();
-
-        foreach ($mutations as $mutation) {
-            if ($remainingQuantity <= 0) {
-                break;
-            }
-
-            $availableQuantity = $mutation->quantity;
-            $transferQuantity = min($availableQuantity, $remainingQuantity);
-
-            // Zmniejsz ilość w obecnej mutacji
-            $mutation->quantity -= $transferQuantity;
-            $mutation->save();
-
-            // Twórz nową mutację dla magazynu docelowego
-            $toWarehouse->createStockMutation($productId, $transferQuantity, $mutation->purchase_price_id);
-
-            // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
-            $this->createStockMutation($productId, -$transferQuantity, $mutation->purchase_price_id);
-
-            $remainingQuantity -= $transferQuantity;
-        }
-
-        if ($remainingQuantity > 0) {
-            throw new StockException('Not enough stock to transfer.');
-        }
-    }
-
-    protected function createStockMutation($productId, $quantity, $purchasePriceId = null)
-    {
-        return $this->stockMutations()->create([
-            'product_id' => $productId,
-            'quantity' => $quantity,
-            'purchase_price_id' => $purchasePriceId,
-        ]);
-    }
-
     public function calculateInventoryValue(): float
     {
         $mutations = $this->stockMutations()->with('purchasePrice')->get();
@@ -152,6 +63,48 @@ class Warehouse extends Model implements WarehouseInterface
         }
 
         return (float)$totalValue;
+    }
+
+    public function getProductStockPrices(ProductInterface $product): array
+    {
+        $order = config('stock.inventory_method', 'FIFO');
+
+        // Pobierz wszystkie mutacje dla danego produktu
+        $mutations = $this->stockMutations()
+            ->where('stockable_id', $product->getId())
+            ->where('stockable_type', $product->getMorphClass())
+            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
+            ->get();
+
+        $currentStock = [];
+        $totalQuantity = 0;
+
+        foreach ($mutations as $mutation) {
+            if ($mutation->quantity > 0) {
+                $currentStock[] = [
+                    'quantity' => $mutation->quantity,
+                    'purchase_price_id' => $mutation->purchase_price_id,
+                    'price' => $mutation->purchasePrice->price
+                ];
+                $totalQuantity += $mutation->quantity;
+            } else {
+                $remainingQuantity = abs($mutation->quantity);
+                while ($remainingQuantity > 0 && !empty($currentStock)) {
+                    $firstIndex = 0;
+                    $availableQuantity = $currentStock[$firstIndex]['quantity'];
+
+                    if ($availableQuantity <= $remainingQuantity) {
+                        $remainingQuantity -= $availableQuantity;
+                        array_shift($currentStock);
+                    } else {
+                        $currentStock[$firstIndex]['quantity'] -= $remainingQuantity;
+                        $remainingQuantity = 0;
+                    }
+                }
+            }
+        }
+
+        return $currentStock;
     }
 
 }
