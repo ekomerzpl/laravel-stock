@@ -13,7 +13,8 @@ class StockMutation extends Model
         'reference_id',
         'warehouse_type',
         'warehouse_id',
-        'amount',
+        'quantity',
+        'type',
         'description',
     ];
 
