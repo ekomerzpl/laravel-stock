@@ -130,4 +130,19 @@ trait HasWarehouseStock
             'purchase_price_id' => $purchasePriceId,
         ]);
     }
+
+    public function calculateInventoryValue(): float
+    {
+        $mutations = $this->stockMutations()->with('purchasePrice')->get();
+
+        $totalValue = 0;
+
+        foreach ($mutations as $mutation) {
+            if ($mutation->quantity > 0 && $mutation->purchasePrice) {
+                $totalValue += $mutation->quantity * $mutation->purchasePrice->price;
+            }
+        }
+
+        return (float)$totalValue;
+    }
 }
