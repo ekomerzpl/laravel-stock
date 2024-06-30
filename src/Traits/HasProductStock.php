@@ -146,7 +146,7 @@ trait HasProductStock
         return $this->stockMutations()->create([
             'quantity' => $quantity,
             'warehouse_id' => $warehouseId,
-            'purchase_price_id' => $purchasePriceId,
+            'purchase_price_id' => $purchasePriceId
         ]);
     }
 
