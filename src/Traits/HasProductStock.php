@@ -170,15 +170,17 @@ trait HasProductStock
 
     public function updateAveragePurchasePrice(): void
     {
+        $purchasePricesTable = config('stock.tables.purchase_prices');
+        $mutationsTable = config('stock.tables.mutations');
+
         $averagePrice = $this->stockMutations()
-            ->join('purchase_prices', 'stock_mutations.purchase_price_id', '=', 'purchase_prices.id')
-            ->where('stock_mutations.product_id', $this->id)
-            ->avg('purchase_prices.price');
+            ->join($purchasePricesTable, "$mutationsTable.purchase_price_id", '=', "$purchasePricesTable.id")
+            ->where("$mutationsTable.product_id", $this->id)
+            ->avg("$purchasePricesTable.price");
 
         $this->average_purchase_price = $averagePrice;
         $this->save();
     }
-
 
     public function batchIncreaseStock($items): void
     {
