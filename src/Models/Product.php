@@ -11,7 +11,6 @@ use Illuminate\Support\Arr;
 
 class Product extends Model implements ProductInterface
 {
-
     protected $fillable = [
         'catalog_number',
         'name',
@@ -33,28 +32,8 @@ class Product extends Model implements ProductInterface
 
     public function stock($date = null, $arguments = [])
     {
-        $date = $date ?: Carbon::now();
-
-        if (!$date instanceof \DateTimeInterface) {
-            $date = Carbon::create($date);
-        }
-
-        $mutations = $this->stockMutations()->where('created_at', '<=', $date->format('Y-m-d H:i:s'));
-        $reference = Arr::get($arguments, 'reference');
-        $warehouse = Arr::get($arguments, 'warehouse');
-
-        if ($reference) {
-            $mutations->where([
-                'reference_type' => $reference->getMorphClass(),
-                'reference_id' => $reference->getKey(),
-            ]);
-        }
-
-        if ($warehouse) {
-            $mutations->where([
-                'to_warehouse_id' => $warehouse->getKey(),
-            ]);
-        }
+        $date = $this->normalizeDate($date);
+        $mutations = $this->filterMutations($date, $arguments);
 
         return (int)$mutations->sum('quantity');
     }
@@ -70,28 +49,14 @@ class Product extends Model implements ProductInterface
             throw new StockException('Not enough stock to decrease.');
         }
 
-        $order = config('stock.inventory_method', 'FIFO');
-
         $remainingQuantity = $quantity;
-
-        // Pobierz aktualny stan magazynowy
-        $currentStock = $warehouse_to->getProductStockPrices($this);
-
-        // Sortuj zgodnie z metodą FIFO/LIFO
-        if ($order === 'LIFO') {
-            $currentStock = array_reverse($currentStock);
-        }
+        $currentStock = $this->getCurrentStock($warehouse_to);
 
         foreach ($currentStock as $stock) {
-            if ($remainingQuantity <= 0) {
-                break;
-            }
+            if ($remainingQuantity <= 0) break;
 
-            $availableQuantity = $stock['quantity'];
-            $decreaseQuantity = min($availableQuantity, $remainingQuantity);
-
+            $decreaseQuantity = min($stock['quantity'], $remainingQuantity);
             $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $stock['purchase_price_id'], $warehouse_from);
-
             $remainingQuantity -= $decreaseQuantity;
         }
 
@@ -102,35 +67,19 @@ class Product extends Model implements ProductInterface
 
     public function transferStock(WarehouseInterface $warehouse_from, WarehouseInterface $warehouse_to, $quantity): void
     {
-
         if ($this->stock(null, ['warehouse' => $warehouse_from]) < $quantity) {
             throw new StockException('Not enough stock to transfer.');
         }
 
-        $order = config('stock.inventory_method', 'FIFO');
         $remainingQuantity = $quantity;
-
-        $mutations = $this->stockMutations()
-            ->where('quantity', '>', 0)
-            ->where('to_warehouse_id', $warehouse_from->getId())
-            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
-            ->get();
+        $mutations = $this->getTransferMutations($warehouse_from);
 
         foreach ($mutations as $mutation) {
-            if ($remainingQuantity <= 0) {
-                break;
-            }
+            if ($remainingQuantity <= 0) break;
 
-            $availableQuantity = $mutation->quantity;
-            $transferQuantity = min($availableQuantity, $remainingQuantity);
-
-            // Twórz nową mutację dla magazynu docelowego
+            $transferQuantity = min($mutation->quantity, $remainingQuantity);
             $this->createStockMutation($transferQuantity, $warehouse_to, $mutation->purchase_price_id, $warehouse_from);
-
-            // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
             $this->createStockMutation(-$transferQuantity, $warehouse_from, $mutation->purchase_price_id);
-
-
             $remainingQuantity -= $transferQuantity;
         }
 
@@ -141,8 +90,8 @@ class Product extends Model implements ProductInterface
 
     public function createPurchase($attributes)
     {
-        $puchasePriceClass = config('stock.models.purchase_price');
-        $purchasePrice = $puchasePriceClass::create([
+        $purchasePriceClass = config('stock.models.purchase_price');
+        $purchasePrice = $purchasePriceClass::create([
             'product_id' => $this->id,
             'supplier_id' => $attributes['supplier_id'] ?? null,
             'price' => $attributes['price'],
@@ -155,10 +104,9 @@ class Product extends Model implements ProductInterface
 
     protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null, ?WarehouseInterface $warehouse_from = null)
     {
-
         $insertArray = [
             'quantity' => $quantity,
-            'type' => ($warehouse_from ? 'transfer' : ($quantity > 0 ? 'add' : 'subtract')),
+            'type' => $this->determineMutationType($quantity, $warehouse_from),
             'to_warehouse_id' => $warehouse_to->getId(),
             'purchase_price_id' => $purchasePriceId,
             'stockable_id' => $this->id,
@@ -168,6 +116,7 @@ class Product extends Model implements ProductInterface
         if ($warehouse_from) {
             $insertArray['from_warehouse_id'] = $warehouse_from->getId();
         }
+
         return $this->stockMutations()->create($insertArray);
     }
 
@@ -216,10 +165,8 @@ class Product extends Model implements ProductInterface
      */
     public function batchDecreaseStock($items): void
     {
-        $order = config('stock.inventory_method', 'FIFO');
-
         foreach ($items as $item) {
-            $this->decreaseStock($item['quantity'], $item['to_warehouse_id'], $order);
+            $this->decreaseStock($item['quantity'], $item['to_warehouse_id']);
         }
     }
 
@@ -228,15 +175,78 @@ class Product extends Model implements ProductInterface
      */
     public function batchTransferStock($items, WarehouseInterface $warehouse_to): void
     {
-        $order = config('stock.inventory_method', 'FIFO');
-
         foreach ($items as $item) {
-            $this->transferStock($warehouse_to, $item['quantity'], $order);
+            $this->transferStock($item['from_warehouse_id'], $warehouse_to, $item['quantity']);
         }
     }
 
     public function stockMutations()
     {
         return $this->morphMany(StockMutation::class, 'stockable');
+    }
+
+    private function normalizeDate($date)
+    {
+        $date = $date ?: Carbon::now();
+
+        if (!$date instanceof \DateTimeInterface) {
+            $date = Carbon::create($date);
+        }
+
+        return $date;
+    }
+
+    private function filterMutations($date, $arguments)
+    {
+        $mutations = $this->stockMutations()->where('created_at', '<=', $date->format('Y-m-d H:i:s'));
+        $reference = Arr::get($arguments, 'reference');
+        $warehouse = Arr::get($arguments, 'warehouse');
+
+        if ($reference) {
+            $mutations->where([
+                'reference_type' => $reference->getMorphClass(),
+                'reference_id' => $reference->getKey(),
+            ]);
+        }
+
+        if ($warehouse) {
+            $mutations->where([
+                'to_warehouse_id' => $warehouse->getKey(),
+            ]);
+        }
+
+        return $mutations;
+    }
+
+    private function getCurrentStock(WarehouseInterface $warehouse)
+    {
+        $order = config('stock.inventory_method', 'FIFO');
+        $currentStock = $warehouse->getProductStockPrices($this);
+
+        if ($order === 'LIFO') {
+            $currentStock = array_reverse($currentStock);
+        }
+
+        return $currentStock;
+    }
+
+    private function getTransferMutations(WarehouseInterface $warehouse_from)
+    {
+        $order = config('stock.inventory_method', 'FIFO');
+
+        return $this->stockMutations()
+            ->where('quantity', '>', 0)
+            ->where('to_warehouse_id', $warehouse_from->getId())
+            ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
+            ->get();
+    }
+
+    private function determineMutationType($quantity, ?WarehouseInterface $warehouse_from)
+    {
+        if ($warehouse_from) {
+            return 'transfer';
+        }
+
+        return $quantity > 0 ? 'add' : 'subtract';
     }
 }
