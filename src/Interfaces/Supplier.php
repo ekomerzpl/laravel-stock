@@ -6,4 +6,6 @@ interface Supplier
 {
     public function getId(): int;
 
+    public function stockMutations();
+
 }

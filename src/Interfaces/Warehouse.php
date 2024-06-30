@@ -11,4 +11,8 @@ interface Warehouse
 
     public function decreaseStock($productId, $quantity);
 
+    public function transferStock($productId, $toWarehouse, $quantity);
+
+    public function calculateInventoryValue(): float;
+
 }
