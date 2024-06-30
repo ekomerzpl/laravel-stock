@@ -40,7 +40,6 @@ trait HasProductStock
 
         if ($warehouse) {
             $mutations->where([
-                'warehouse_type' => $warehouse->getMorphClass(),
                 'to_warehouse_id' => $warehouse->getKey(),
             ]);
         }
@@ -72,10 +71,6 @@ trait HasProductStock
 
             $availableQuantity = $mutation->quantity;
             $decreaseQuantity = min($availableQuantity, $remainingQuantity);
-
-            // Zmniejsz ilość w obecnej mutacji
-            $mutation->quantity -= $decreaseQuantity;
-            $mutation->save();
 
             // Twórz nową mutację ze zmniejszoną ilością
             $this->createStockMutation(-$decreaseQuantity, $warehouseId, $mutation->purchase_price_id);
