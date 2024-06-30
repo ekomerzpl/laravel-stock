@@ -41,7 +41,7 @@ trait HasProductStock
         if ($warehouse) {
             $mutations->where([
                 'warehouse_type' => $warehouse->getMorphClass(),
-                'warehouse_id' => $warehouse->getKey(),
+                'to_warehouse_id' => $warehouse->getKey(),
             ]);
         }
 
@@ -61,7 +61,7 @@ trait HasProductStock
 
         $mutations = $this->stockMutations()
             ->where('product_id', $this->id)
-            ->where('warehouse_id', $warehouseId)
+            ->where('to_warehouse_id', $warehouseId)
             ->where('quantity', '>', 0)
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
             ->get();
@@ -117,7 +117,7 @@ trait HasProductStock
             $this->createStockMutation($transferQuantity, $toWarehouseId, $mutation->purchase_price_id);
 
             // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
-            $this->createStockMutation(-$transferQuantity, $mutation->warehouse_id, $mutation->purchase_price_id);
+            $this->createStockMutation(-$transferQuantity, $mutation->to_warehouse_id, $mutation->purchase_price_id);
 
             $remainingQuantity -= $transferQuantity;
         }
@@ -136,7 +136,7 @@ trait HasProductStock
             'price' => $attributes['price'],
         ]);
 
-        $this->increaseStock($attributes['quantity'], $attributes['warehouse_id'], $purchasePrice->id);
+        $this->increaseStock($attributes['quantity'], $attributes['to_warehouse_id'], $purchasePrice->id);
 
         return $purchasePrice;
     }
@@ -146,7 +146,7 @@ trait HasProductStock
         return $this->stockMutations()->create([
             'quantity' => $quantity,
             'type' => $quantity > 0 ? 'add': 'subtract',
-            'warehouse_id' => $warehouseId,
+            'to_warehouse_id' => $warehouseId,
             'purchase_price_id' => $purchasePriceId,
             'stockable_id' => $this->id,
             'stockable_type' => self::class,
@@ -178,7 +178,8 @@ trait HasProductStock
 
         $averagePrice = $this->stockMutations()
             ->join($purchasePricesTable, "$mutationsTable.purchase_price_id", '=', "$purchasePricesTable.id")
-            ->where("$mutationsTable.product_id", $this->id)
+            ->where("$mutationsTable.stockable_type", $this->getMorphClass())
+            ->where("$mutationsTable.stockable_id", $this->id)
             ->avg("$purchasePricesTable.price");
 
         $this->average_purchase_price = $averagePrice;
@@ -188,25 +189,29 @@ trait HasProductStock
     public function batchIncreaseStock($items): void
     {
         foreach ($items as $item) {
-            $this->increaseStock($item['quantity'], $item['warehouse_id'], $item['purchase_price_id'] ?? null);
+            $this->increaseStock($item['quantity'], $item['to_warehouse_id'], $item['purchase_price_id'] ?? null);
         }
     }
 
     /**
      * @throws \Exception
      */
-    public function batchDecreaseStock($items, $order = 'FIFO'): void
+    public function batchDecreaseStock($items): void
     {
+        $order = config('stock.inventory_method', 'FIFO');
+
         foreach ($items as $item) {
-            $this->decreaseStock($item['quantity'], $item['warehouse_id'], $order);
+            $this->decreaseStock($item['quantity'], $item['to_warehouse_id'], $order);
         }
     }
 
     /**
      * @throws \Exception
      */
-    public function batchTransferStock($items, $toWarehouseId, $order = 'FIFO'): void
+    public function batchTransferStock($items, $toWarehouseId): void
     {
+        $order = config('stock.inventory_method', 'FIFO');
+
         foreach ($items as $item) {
             $this->transferStock($toWarehouseId, $item['quantity'], $order);
         }
