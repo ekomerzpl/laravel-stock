@@ -2,6 +2,7 @@
 
 namespace Appstract\Stock\Models;
 
+use Appstract\Stock\Enums\StockOperationType;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Appstract\Stock\Exceptions\StockException;
@@ -25,12 +26,39 @@ class Product extends Model implements ProductInterface
         return 1;
     }
 
+
+    public function manageStock(StockOperationData $data): void
+    {
+        try {
+            $data->validate();
+            switch ($data->operation) {
+                case StockOperationType::purchase:
+                    $purchasePriceId = $this->createPurchase($data->supplier, $data->price);
+                    $this->increaseStock($data->quantity, $data->warehouseTo, $purchasePriceId);
+                    break;
+                case StockOperationType::increase:
+                    $this->increaseStock($data->quantity, $data->warehouseTo);
+                    break;
+                case StockOperationType::decrease:
+                    $this->decreaseStock($data->quantity, $data->warehouseTo, $data->warehouseFrom);
+                    break;
+                case StockOperationType::transfer:
+                    $this->transferStock($data->quantity, $data->warehouseTo, $data->warehouseFrom);
+                    break;
+                default:
+                    throw new \InvalidArgumentException("Invalid operation type");
+            }
+        } catch (StockException $e) {
+            fail($e->getMessage());
+        }
+    }
+
     public function getStockAttribute()
     {
         return $this->stock();
     }
 
-    public function stock($date = null, $arguments = [])
+    public function stock($date = null, $arguments = []): int
     {
         $date = $this->normalizeDate($date);
         $mutations = $this->filterMutations($date, $arguments);
@@ -65,7 +93,7 @@ class Product extends Model implements ProductInterface
         }
     }
 
-    public function transferStock(WarehouseInterface $warehouse_from, WarehouseInterface $warehouse_to, $quantity): void
+    public function transferStock($quantity, WarehouseInterface $warehouse_to, WarehouseInterface $warehouse_from): void
     {
         if ($this->stock(null, ['warehouse' => $warehouse_from]) < $quantity) {
             throw new StockException('Not enough stock to transfer.');
@@ -88,18 +116,15 @@ class Product extends Model implements ProductInterface
         }
     }
 
-    public function createPurchase($attributes)
+    public function createPurchase(Supplier $supplier, $price): int
     {
         $purchasePriceClass = config('stock.models.purchase_price');
         $purchasePrice = $purchasePriceClass::create([
             'product_id' => $this->id,
-            'supplier_id' => $attributes['supplier_id'] ?? null,
-            'price' => $attributes['price'],
+            'supplier_id' => $supplier->id,
+            'price' => $price,
         ]);
-
-        $this->increaseStock($attributes['quantity'], $attributes['to_warehouse'], $purchasePrice->id);
-
-        return $purchasePrice;
+        return $purchasePrice->id;
     }
 
     protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null, ?WarehouseInterface $warehouse_from = null)
@@ -176,7 +201,7 @@ class Product extends Model implements ProductInterface
     public function batchTransferStock($items, WarehouseInterface $warehouse_to): void
     {
         foreach ($items as $item) {
-            $this->transferStock($item['from_warehouse_id'], $warehouse_to, $item['quantity']);
+            $this->transferStock($item['quantity'], $warehouse_to, $item['from_warehouse_id']);
         }
     }
 
