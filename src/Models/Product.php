@@ -136,7 +136,7 @@ class Product extends Model implements ProductInterface
         ]);
 
         $this->increaseStock($attributes['quantity'], $attributes['to_warehouse_id'], $purchasePrice->id);
-
+        $this->updateAveragePurchasePrice();
         return $purchasePrice;
     }
 
@@ -144,17 +144,17 @@ class Product extends Model implements ProductInterface
     {
         return $this->stockMutations()->create([
             'quantity' => $quantity,
-            'type' => $quantity > 0 ? 'add': 'subtract',
+            'type' => $quantity > 0 ? 'add' : 'subtract',
             'to_warehouse_id' => $warehouseId,
             'purchase_price_id' => $purchasePriceId,
             'stockable_id' => $this->id,
-            'stockable_type' => self::class,
+            'stockable_type' => $this->getMorphClass(),
         ]);
     }
 
     public function getLowStockThresholdAttribute(): int
     {
-        return 10; // Próg niskiego stanu magazynowego
+        return 0;
     }
 
     public function isLowStock(): bool

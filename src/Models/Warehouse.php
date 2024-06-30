@@ -2,6 +2,7 @@
 
 namespace Appstract\Stock\Models;
 
+use Appstract\Stock\Interfaces\Product as ProductInterface;
 use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
 use Illuminate\Database\Eloquent\Model;
 
@@ -24,15 +25,15 @@ class Warehouse extends Model implements WarehouseInterface
     public function getProductStock($productId)
     {
         return $this->stockMutations()
-            ->where('product_id', $productId)
+            ->where('stockable_id', $productId)
             ->sum('quantity');
     }
 
     public function getProductsInStock()
     {
         return $this->stockMutations()
-            ->select('product_id')
-            ->groupBy('product_id')
+            ->select('stockable_id')
+            ->groupBy('stockable_id')
             ->havingRaw('SUM(quantity) > 0')
             ->get();
     }
@@ -40,8 +41,8 @@ class Warehouse extends Model implements WarehouseInterface
     public function getProductsOutOfStock()
     {
         return $this->stockMutations()
-            ->select('product_id')
-            ->groupBy('product_id')
+            ->select('stockable_id')
+            ->groupBy('stockable_id')
             ->havingRaw('SUM(quantity) <= 0')
             ->get();
     }
@@ -90,13 +91,14 @@ class Warehouse extends Model implements WarehouseInterface
         }
     }
 
-    public function transferStock($productId, $toWarehouse, $quantity)
+    public function transferStock(ProductInterface $stockable, $toWarehouse, $quantity)
     {
         $order = config('stock.inventory_method', 'FIFO');
         $remainingQuantity = $quantity;
 
         $mutations = $this->stockMutations()
-            ->where('product_id', $productId)
+            ->where('stockable_id', $stockable->getId())
+            ->where('stockable_type', $stockable->getMorphClass())
             ->where('quantity', '>', 0)
             ->orderBy('created_at', $order === 'FIFO' ? 'asc' : 'desc')
             ->get();
@@ -150,5 +152,5 @@ class Warehouse extends Model implements WarehouseInterface
 
         return (float)$totalValue;
     }
-    
+
 }
