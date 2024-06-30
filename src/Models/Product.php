@@ -64,7 +64,7 @@ class Product extends Model implements ProductInterface
         return $this->createStockMutation($quantity, $warehouse, $purchasePriceId);
     }
 
-    public function decreaseStock($quantity, WarehouseInterface $warehouse_to): void
+    public function decreaseStock($quantity, WarehouseInterface $warehouse_to, ?WarehouseInterface $warehouse_from = null): void
     {
         if ($this->stock(null, ['warehouse' => $warehouse_to]) < $quantity) {
             throw new StockException('Not enough stock to decrease.');
@@ -90,7 +90,7 @@ class Product extends Model implements ProductInterface
             $availableQuantity = $stock['quantity'];
             $decreaseQuantity = min($availableQuantity, $remainingQuantity);
 
-            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $stock['purchase_price_id']);
+            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $stock['purchase_price_id'], $warehouse_from);
 
             $remainingQuantity -= $decreaseQuantity;
         }
@@ -125,10 +125,11 @@ class Product extends Model implements ProductInterface
             $transferQuantity = min($availableQuantity, $remainingQuantity);
 
             // Twórz nową mutację dla magazynu docelowego
-            $this->createStockMutation($transferQuantity, $warehouse_to, $mutation->purchase_price_id);
+            $this->createStockMutation($transferQuantity, $warehouse_to, $mutation->purchase_price_id, $warehouse_from);
 
             // Twórz nową mutację dla zmniejszenia w magazynie źródłowym
             $this->createStockMutation(-$transferQuantity, $warehouse_from, $mutation->purchase_price_id);
+
 
             $remainingQuantity -= $transferQuantity;
         }
@@ -152,16 +153,22 @@ class Product extends Model implements ProductInterface
         return $purchasePrice;
     }
 
-    protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null)
+    protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null, ?WarehouseInterface $warehouse_from = null)
     {
-        return $this->stockMutations()->create([
+
+        $insertArray = [
             'quantity' => $quantity,
-            'type' => $quantity > 0 ? 'add' : 'subtract',
+            'type' => ($warehouse_from ? 'transfer' : ($quantity > 0 ? 'add' : 'subtract')),
             'to_warehouse_id' => $warehouse_to->getId(),
             'purchase_price_id' => $purchasePriceId,
             'stockable_id' => $this->id,
             'stockable_type' => self::class,
-        ]);
+        ];
+
+        if ($warehouse_from) {
+            $insertArray['from_warehouse_id'] = $warehouse_from->getId();
+        }
+        return $this->stockMutations()->create($insertArray);
     }
 
     public function getLowStockThresholdAttribute(): int

@@ -2,7 +2,6 @@
 
 namespace Appstract\Stock\Models;
 
-use Appstract\Stock\Exceptions\StockException;
 use Appstract\Stock\Interfaces\Product as ProductInterface;
 use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
 use Illuminate\Database\Eloquent\Model;
@@ -57,7 +56,7 @@ class Warehouse extends Model implements WarehouseInterface
         $totalValue = 0;
 
         foreach ($mutations as $mutation) {
-            if ($mutation->quantity > 0 && $mutation->purchasePrice) {
+            if ($mutation->purchasePrice) {
                 $totalValue += $mutation->quantity * $mutation->purchasePrice->price;
             }
         }
@@ -77,7 +76,6 @@ class Warehouse extends Model implements WarehouseInterface
             ->get();
 
         $currentStock = [];
-        $totalQuantity = 0;
 
         foreach ($mutations as $mutation) {
             if ($mutation->quantity > 0) {
@@ -86,7 +84,6 @@ class Warehouse extends Model implements WarehouseInterface
                     'purchase_price_id' => $mutation->purchase_price_id,
                     'price' => $mutation->purchasePrice->price
                 ];
-                $totalQuantity += $mutation->quantity;
             } else {
                 $remainingQuantity = abs($mutation->quantity);
                 while ($remainingQuantity > 0 && !empty($currentStock)) {
@@ -103,8 +100,6 @@ class Warehouse extends Model implements WarehouseInterface
                 }
             }
         }
-
         return $currentStock;
     }
-
 }
