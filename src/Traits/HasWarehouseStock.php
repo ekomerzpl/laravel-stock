@@ -51,7 +51,7 @@ trait HasWarehouseStock
         return $this->createStockMutation($productId, $quantity, $purchasePriceId);
     }
 
-    public function decreaseStock($productId, $quantity)
+    public function decreaseStock($productId, $quantity): void
     {
         $order = config('stock.inventory_method', 'FIFO');
         $remainingQuantity = $quantity;
