@@ -58,4 +58,14 @@ class StockMutation extends Model
     {
         return $this->morphTo();
     }
+
+    /**
+     * Relation.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function purchasePrice()
+    {
+        return $this->belongsTo(config('stock.models.purchase_price'));
+    }
 }

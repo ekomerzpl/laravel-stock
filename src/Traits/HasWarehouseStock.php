@@ -9,7 +9,7 @@ trait HasWarehouseStock
 {
     public function stockMutations()
     {
-        return $this->morphMany(StockMutation::class, 'warehouse');
+        return $this->hasMany(StockMutation::class, 'to_warehouse_id');
     }
 
     public function getProductStock($productId)
