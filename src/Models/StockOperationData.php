@@ -11,11 +11,12 @@ class StockOperationData
     public ?WarehouseInterface $warehouseFrom = null;
     public WarehouseInterface $warehouseTo;
     public StockOperationType $operation = StockOperationType::increase;
-    public ?Model $reference;
-    public ?Supplier $supplier;
-    public float $price;
+    public ?Model $reference = null;
+    public ?Supplier $supplier = null;
+    public ?int $purchasePriceId;
+    public float $price = 0;
     public int $quantity = 0;
-    public string $description = '';
+    public string $description;
 
     public function validate()
     {

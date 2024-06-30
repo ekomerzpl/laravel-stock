@@ -26,24 +26,23 @@ class Product extends Model implements ProductInterface
         return 1;
     }
 
-
     public function manageStock(StockOperationData $data): void
     {
         try {
             $data->validate();
             switch ($data->operation) {
                 case StockOperationType::purchase:
-                    $purchasePriceId = $this->createPurchase($data->supplier, $data->price);
-                    $this->increaseStock($data->quantity, $data->warehouseTo, $purchasePriceId);
+                    $data->purchasePriceId = $this->createPurchase($data->supplier, $data->price);
+                    $this->increaseStock($data);
                     break;
                 case StockOperationType::increase:
-                    $this->increaseStock($data->quantity, $data->warehouseTo);
+                    $this->increaseStock($data);
                     break;
                 case StockOperationType::decrease:
-                    $this->decreaseStock($data->quantity, $data->warehouseTo, $data->warehouseFrom);
+                    $this->decreaseStock($data);
                     break;
                 case StockOperationType::transfer:
-                    $this->transferStock($data->quantity, $data->warehouseTo, $data->warehouseFrom);
+                    $this->transferStock($data);
                     break;
                 default:
                     throw new \InvalidArgumentException("Invalid operation type");
@@ -66,25 +65,29 @@ class Product extends Model implements ProductInterface
         return (int)$mutations->sum('quantity');
     }
 
-    public function increaseStock($quantity, WarehouseInterface $warehouse, $purchasePriceId = null)
+    public function increaseStock(StockOperationData $data)
     {
-        return $this->createStockMutation($quantity, $warehouse, $purchasePriceId);
+        return $this->createStockMutation($data->quantity, $data->warehouseTo, $data->purchasePriceId);
     }
 
-    public function decreaseStock($quantity, WarehouseInterface $warehouse_to, ?WarehouseInterface $warehouse_from = null): void
+    /**
+     * @throws StockException
+     */
+    public function decreaseStock(StockOperationData $data): void
     {
-        if ($this->stock(null, ['warehouse' => $warehouse_to]) < $quantity) {
+
+        if ($this->stock(null, ['warehouse' => $data->warehouseTo]) < $data->quantity) {
             throw new StockException('Not enough stock to decrease.');
         }
 
-        $remainingQuantity = $quantity;
-        $currentStock = $this->getCurrentStock($warehouse_to);
+        $remainingQuantity = $data->quantity;
+        $currentStock = $this->getCurrentStock($data->warehouseTo);
 
         foreach ($currentStock as $stock) {
             if ($remainingQuantity <= 0) break;
 
             $decreaseQuantity = min($stock['quantity'], $remainingQuantity);
-            $this->createStockMutation(-$decreaseQuantity, $warehouse_to, $stock['purchase_price_id'], $warehouse_from);
+            $this->createStockMutation(-$decreaseQuantity, $data->warehouseTo, $stock['purchase_price_id'], $data->warehouseFrom);
             $remainingQuantity -= $decreaseQuantity;
         }
 
@@ -93,21 +96,21 @@ class Product extends Model implements ProductInterface
         }
     }
 
-    public function transferStock($quantity, WarehouseInterface $warehouse_to, WarehouseInterface $warehouse_from): void
+    public function transferStock(StockOperationData $data): void
     {
-        if ($this->stock(null, ['warehouse' => $warehouse_from]) < $quantity) {
+        if ($this->stock(null, ['warehouse' => $data->warehouseFrom]) < $data->quantity) {
             throw new StockException('Not enough stock to transfer.');
         }
 
-        $remainingQuantity = $quantity;
-        $mutations = $this->getTransferMutations($warehouse_from);
+        $remainingQuantity = $data->quantity;
+        $mutations = $this->getTransferMutations($data->warehouseFrom);
 
         foreach ($mutations as $mutation) {
             if ($remainingQuantity <= 0) break;
 
             $transferQuantity = min($mutation->quantity, $remainingQuantity);
-            $this->createStockMutation($transferQuantity, $warehouse_to, $mutation->purchase_price_id, $warehouse_from);
-            $this->createStockMutation(-$transferQuantity, $warehouse_from, $mutation->purchase_price_id);
+            $this->createStockMutation($transferQuantity, $data->warehouseTo, $mutation->purchase_price_id, $data->warehouseFrom);
+            $this->createStockMutation(-$transferQuantity, $data->warehouseFrom, $mutation->purchase_price_id);
             $remainingQuantity -= $transferQuantity;
         }
 
@@ -181,7 +184,8 @@ class Product extends Model implements ProductInterface
     public function batchIncreaseStock($items): void
     {
         foreach ($items as $item) {
-            $this->increaseStock($item['quantity'], $item['to_warehouse_id'], $item['purchase_price_id'] ?? null);
+            //@todo implement this method
+            //$this->increaseStock($item['quantity'], $item['to_warehouse_id'], $item['purchase_price_id'] ?? null);
         }
     }
 
@@ -191,7 +195,8 @@ class Product extends Model implements ProductInterface
     public function batchDecreaseStock($items): void
     {
         foreach ($items as $item) {
-            $this->decreaseStock($item['quantity'], $item['to_warehouse_id']);
+            //@todo implement this method
+            //$this->decreaseStock($item['quantity'], $item['to_warehouse_id']);
         }
     }
 
