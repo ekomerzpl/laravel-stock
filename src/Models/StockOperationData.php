@@ -3,7 +3,7 @@
 namespace Appstract\Stock\Models;
 
 use Appstract\Stock\Enums\StockOperationType;
-use \Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
+use \Appstract\Stock\Interfaces\WarehouseInterface as WarehouseInterface;
 use Illuminate\Database\Eloquent\Model;
 
 class StockOperationData
@@ -12,7 +12,7 @@ class StockOperationData
     public WarehouseInterface $warehouseTo;
     public StockOperationType $operation = StockOperationType::increase;
     public ?Model $reference = null;
-    public ?Supplier $supplier = null;
+    public ?StockSupplier $supplier = null;
     public ?int $purchasePriceId;
     public float $price = 0;
     public int $quantity = 0;

@@ -2,11 +2,11 @@
 
 namespace Appstract\Stock\Models;
 
-use Appstract\Stock\Interfaces\Product as ProductInterface;
-use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
+use Appstract\Stock\Interfaces\ProductInterface;
+use Appstract\Stock\Interfaces\WarehouseInterface;
 use Illuminate\Database\Eloquent\Model;
 
-class Warehouse extends Model implements WarehouseInterface
+class StockWarehouse extends Model implements WarehouseInterface
 {
     protected $fillable = [
         'name',

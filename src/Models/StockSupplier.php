@@ -2,11 +2,11 @@
 
 namespace Appstract\Stock\Models;
 
-use Appstract\Stock\Interfaces\Supplier as SupplierInterface;
+use Appstract\Stock\Interfaces\SupplierInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
-class Supplier extends Model implements SupplierInterface
+class StockSupplier extends Model implements SupplierInterface
 {
     protected $fillable = [
         'name',
@@ -19,7 +19,7 @@ class Supplier extends Model implements SupplierInterface
 
     public function stockMutations(): HasManyThrough
     {
-        return $this->hasManyThrough(StockMutation::class, PurchasePrice::class, 'supplier_id', 'purchase_price_id');
+        return $this->hasManyThrough(StockMutation::class, StockPurchasePrice::class, 'supplier_id', 'purchase_price_id');
     }
 
     public function getSupplierStockHistory()

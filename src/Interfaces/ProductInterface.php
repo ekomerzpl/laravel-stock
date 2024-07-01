@@ -2,10 +2,9 @@
 
 namespace Appstract\Stock\Interfaces;
 
-interface Supplier
+interface ProductInterface
 {
     public function getId(): int;
 
-    public function stockMutations();
-
+    public function stock($date = null, $arguments = []);
 }

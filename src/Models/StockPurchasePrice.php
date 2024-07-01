@@ -4,7 +4,7 @@ namespace Appstract\Stock\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class PurchasePrice extends Model
+class StockPurchasePrice extends Model
 {
     public function __construct(array $attributes = [])
     {

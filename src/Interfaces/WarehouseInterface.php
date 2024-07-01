@@ -2,7 +2,7 @@
 
 namespace Appstract\Stock\Interfaces;
 
-interface Warehouse
+interface WarehouseInterface
 {
 
     public function getId(): int;

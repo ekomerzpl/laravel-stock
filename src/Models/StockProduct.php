@@ -6,11 +6,11 @@ use Appstract\Stock\Enums\StockOperationType;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Appstract\Stock\Exceptions\StockException;
-use Appstract\Stock\Interfaces\Product as ProductInterface;
-use Appstract\Stock\Interfaces\Warehouse as WarehouseInterface;
+use Appstract\Stock\Interfaces\ProductInterface;
+use Appstract\Stock\Interfaces\WarehouseInterface as WarehouseInterface;
 use Illuminate\Support\Arr;
 
-class Product extends Model implements ProductInterface
+class StockProduct extends Model implements ProductInterface
 {
     protected $fillable = [
         'catalog_number',
@@ -119,7 +119,7 @@ class Product extends Model implements ProductInterface
         }
     }
 
-    public function createPurchase(Supplier $supplier, $price): int
+    public function createPurchase(StockSupplier $supplier, $price): int
     {
         $purchasePriceClass = config('stock.models.purchase_price');
         $purchasePrice = $purchasePriceClass::create([
@@ -150,7 +150,7 @@ class Product extends Model implements ProductInterface
 
     public function getLowStockThresholdAttribute(): int
     {
-        return 10; // Próg niskiego stanu magazynowego
+        return 0;
     }
 
     public function isLowStock(): bool
