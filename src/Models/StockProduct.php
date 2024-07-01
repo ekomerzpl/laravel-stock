@@ -87,20 +87,18 @@ class StockProduct extends Model implements ProductInterface
             if ($remainingQuantity <= 0) break;
 
             $transferQuantity = min($mutation->quantity, $remainingQuantity);
+            $data->quantity = $transferQuantity;
+            $data->purchasePriceId = $mutation->purchase_price_id;
 
             $increaseData = clone($data);
-            $increaseData->quantity = $transferQuantity;
-            $increaseData->purchasePriceId = $mutation->purchase_price_id;
             $increaseData->warehouseTo = $data->warehouseTo;
             $increaseData->warehouseFrom = $data->warehouseFrom;
-            $this->createStockMutation($increaseData);
+            $this->increaseStock($increaseData);
 
             $decreaseData = clone($data);
-            $decreaseData->quantity = -$transferQuantity;
-            $decreaseData->purchasePriceId = $mutation->purchase_price_id;
             $decreaseData->warehouseTo = $data->warehouseFrom;
             $decreaseData->warehouseFrom = $data->warehouseTo;
-            $this->createStockMutation($decreaseData);
+            $this->decreaseStock($decreaseData);
 
             $remainingQuantity -= $transferQuantity;
         }
@@ -250,7 +248,7 @@ class StockProduct extends Model implements ProductInterface
             return 'transfer';
         }
 
-        return $quantity > 0 ? 'add' : 'subtract';
+        return $quantity > 0 ? 'increase' : 'decrease';
     }
 
     /*
