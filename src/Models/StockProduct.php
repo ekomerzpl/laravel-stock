@@ -67,7 +67,7 @@ class StockProduct extends Model implements ProductInterface
 
     public function increaseStock(StockOperationData $data)
     {
-        return $this->createStockMutation($data->quantity, $data->warehouseTo, $data->purchasePriceId);
+        return $this->createStockMutation($data);
     }
 
     /**
@@ -87,7 +87,9 @@ class StockProduct extends Model implements ProductInterface
             if ($remainingQuantity <= 0) break;
 
             $decreaseQuantity = min($stock['quantity'], $remainingQuantity);
-            $this->createStockMutation(-$decreaseQuantity, $data->warehouseTo, $stock['purchase_price_id'], $data->warehouseFrom);
+            $data->quantity = -$decreaseQuantity;
+            $data->purchasePriceId = $stock['purchase_price_id'];
+            $this->createStockMutation($data);
             $remainingQuantity -= $decreaseQuantity;
         }
 
@@ -109,8 +111,20 @@ class StockProduct extends Model implements ProductInterface
             if ($remainingQuantity <= 0) break;
 
             $transferQuantity = min($mutation->quantity, $remainingQuantity);
-            $this->createStockMutation($transferQuantity, $data->warehouseTo, $mutation->purchase_price_id, $data->warehouseFrom);
-            $this->createStockMutation(-$transferQuantity, $data->warehouseFrom, $mutation->purchase_price_id);
+
+            $increaseData = clone($data);
+            $increaseData->quantity = $transferQuantity;
+            $increaseData->purchasePriceId = $mutation->purchase_price_id;
+            $increaseData->warehouseTo = $data->warehouseTo;
+            $increaseData->warehouseFrom = $data->warehouseFrom;
+            $this->createStockMutation($increaseData);
+
+            $decreaseData = clone($data);
+            $decreaseData->quantity = -$transferQuantity;
+            $decreaseData->purchasePriceId = $mutation->purchase_price_id;
+            $decreaseData->warehouseTo = $data->warehouseFrom;
+            $this->createStockMutation($decreaseData);
+
             $remainingQuantity -= $transferQuantity;
         }
 
@@ -130,19 +144,20 @@ class StockProduct extends Model implements ProductInterface
         return $purchasePrice->id;
     }
 
-    protected function createStockMutation($quantity, WarehouseInterface $warehouse_to, $purchasePriceId = null, ?WarehouseInterface $warehouse_from = null)
+    protected function createStockMutation(StockOperationData $data)
     {
+
         $insertArray = [
-            'quantity' => $quantity,
-            'type' => $this->determineMutationType($quantity, $warehouse_from),
-            'to_warehouse_id' => $warehouse_to->getId(),
-            'purchase_price_id' => $purchasePriceId,
+            'quantity' => $data->quantity,
+            'type' => $this->determineMutationType($data->quantity, $data->warehouseFrom),
+            'to_warehouse_id' => $data->warehouseTo->getId(),
+            'purchase_price_id' => $data->purchasePriceId,
             'stockable_id' => $this->id,
             'stockable_type' => self::class,
         ];
 
-        if ($warehouse_from) {
-            $insertArray['from_warehouse_id'] = $warehouse_from->getId();
+        if ($data->warehouseFrom) {
+            $insertArray['from_warehouse_id'] = $data->warehouseFrom->getId();
         }
 
         return $this->stockMutations()->create($insertArray);
@@ -181,49 +196,17 @@ class StockProduct extends Model implements ProductInterface
         $this->save();
     }
 
-    public function batchIncreaseStock($items): void
-    {
-        foreach ($items as $item) {
-            //@todo implement this method
-            //$this->increaseStock($item['quantity'], $item['to_warehouse_id'], $item['purchase_price_id'] ?? null);
-        }
-    }
-
-    /**
-     * @throws StockException
-     */
-    public function batchDecreaseStock($items): void
-    {
-        foreach ($items as $item) {
-            //@todo implement this method
-            //$this->decreaseStock($item['quantity'], $item['to_warehouse_id']);
-        }
-    }
-
-    /**
-     * @throws StockException
-     */
-    public function batchTransferStock($items, WarehouseInterface $warehouse_to): void
-    {
-        foreach ($items as $item) {
-            $this->transferStock($item['quantity'], $warehouse_to, $item['from_warehouse_id']);
-        }
-    }
-
     public function stockMutations()
     {
         return $this->morphMany(StockMutation::class, 'stockable');
     }
 
-    private function normalizeDate($date)
+    private function normalizeDate($date): Carbon
     {
-        $date = $date ?: Carbon::now();
-
-        if (!$date instanceof \DateTimeInterface) {
-            $date = Carbon::create($date);
+        if ($date instanceof \DateTimeInterface) {
+            return Carbon::instance($date);
         }
-
-        return $date;
+        return Carbon::parse($date ?: Carbon::now());
     }
 
     private function filterMutations($date, $arguments)
@@ -271,7 +254,7 @@ class StockProduct extends Model implements ProductInterface
             ->get();
     }
 
-    private function determineMutationType($quantity, ?WarehouseInterface $warehouse_from)
+    private function determineMutationType($quantity, ?WarehouseInterface $warehouse_from): string
     {
         if ($warehouse_from) {
             return 'transfer';
@@ -279,4 +262,44 @@ class StockProduct extends Model implements ProductInterface
 
         return $quantity > 0 ? 'add' : 'subtract';
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
+    public function scopeWhereInStock($query, WarehouseInterface $warehouse = null)
+    {
+        return $query->where(function ($query) use ($warehouse) {
+            return $query->whereHas('stockMutations', function ($query) use ($warehouse) {
+                return $query
+                    ->select('stockable_id')
+                    ->when($warehouse, function ($query) use ($warehouse) {
+                        return $query
+                            ->where('warehouse_type', $warehouse->getMorphClass())
+                            ->where('warehouse_id', $warehouse->getKey());
+                    })
+                    ->groupBy('stockable_id')
+                    ->havingRaw('SUM(quantity) > 0');
+            });
+        });
+    }
+
+    public function scopeWhereOutOfStock($query, WarehouseInterface $warehouse = null)
+    {
+        return $query->where(function ($query) use ($warehouse) {
+            return $query->whereHas('stockMutations', function ($query) use ($warehouse) {
+                return $query->select('stockable_id')
+                    ->when($warehouse, function ($query) use ($warehouse) {
+                        return $query
+                            ->where('warehouse_type', $warehouse->getMorphClass())
+                            ->where('warehouse_id', $warehouse->getKey());
+                    })
+                    ->groupBy('stockable_id')
+                    ->havingRaw('SUM(quantity) <= 0');
+            })->orWhereDoesntHave('stockMutations');
+        });
+    }
+
 }
