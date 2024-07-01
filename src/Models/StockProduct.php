@@ -125,9 +125,12 @@ class StockProduct extends Model implements ProductInterface
             'to_warehouse_id' => $data->warehouseTo->getId(),
             'stockable_id' => $this->id,
             'stockable_type' => self::class,
+            'description' => $data->description,
+            'reference_id' => $data->reference?->id,
+            'reference_type' => $data->reference?->getMorphClass(),
         ];
 
-        if($data->purchasePriceId) {
+        if ($data->purchasePriceId) {
             $insertArray['purchase_price_id'] = $data->purchasePriceId;
         }
 

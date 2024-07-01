@@ -18,7 +18,7 @@ class StockOperationData
     public int $quantity = 0;
     public string $description;
 
-    public function validate()
+    public function validate(): void
     {
         switch ($this->operation) {
             case StockOperationType::purchase:
