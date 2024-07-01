@@ -52,7 +52,7 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    public function increaseStock(StockOperationData $data): void
+    protected function increaseStock(StockOperationData $data): void
     {
         $this->createStockMutation($data);
     }
@@ -60,7 +60,7 @@ class StockProduct extends Model implements ProductInterface
     /**
      * @throws StockException
      */
-    public function decreaseStock(StockOperationData $data): void
+    protected  function decreaseStock(StockOperationData $data): void
     {
 
         if ($this->stock(null, ['warehouse' => $data->warehouseTo]) < $data->quantity) {
@@ -85,7 +85,7 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    public function transferStock(StockOperationData $data): void
+    protected  function transferStock(StockOperationData $data): void
     {
         if ($this->stock(null, ['warehouse' => $data->warehouseFrom]) < $data->quantity) {
             throw new StockException('Not enough stock to transfer.');
@@ -114,6 +114,17 @@ class StockProduct extends Model implements ProductInterface
 
             $remainingQuantity -= $transferQuantity;
         }
+    }
+
+    protected function createPurchase(StockSupplier $supplier, $price): int
+    {
+        $purchasePriceClass = config('stock.models.purchase_price');
+        $purchasePrice = $purchasePriceClass::create([
+            'product_id' => $this->id,
+            'supplier_id' => $supplier->id,
+            'price' => $price,
+        ]);
+        return $purchasePrice->id;
     }
 
     protected function createStockMutation(StockOperationData $data): void
@@ -145,17 +156,6 @@ class StockProduct extends Model implements ProductInterface
         $mutations = $this->filterMutations($date, $arguments);
 
         return (int)$mutations->sum('quantity');
-    }
-
-    public function createPurchase(StockSupplier $supplier, $price): int
-    {
-        $purchasePriceClass = config('stock.models.purchase_price');
-        $purchasePrice = $purchasePriceClass::create([
-            'product_id' => $this->id,
-            'supplier_id' => $supplier->id,
-            'price' => $price,
-        ]);
-        return $purchasePrice->id;
     }
 
     public function getLowStockThresholdAttribute(): int
