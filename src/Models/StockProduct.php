@@ -52,19 +52,6 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    public function getStockAttribute()
-    {
-        return $this->stock();
-    }
-
-    public function stock($date = null, $arguments = []): int
-    {
-        $date = $this->normalizeDate($date);
-        $mutations = $this->filterMutations($date, $arguments);
-
-        return (int)$mutations->sum('quantity');
-    }
-
     public function increaseStock(StockOperationData $data)
     {
         return $this->createStockMutation($data);
@@ -133,17 +120,6 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    public function createPurchase(StockSupplier $supplier, $price): int
-    {
-        $purchasePriceClass = config('stock.models.purchase_price');
-        $purchasePrice = $purchasePriceClass::create([
-            'product_id' => $this->id,
-            'supplier_id' => $supplier->id,
-            'price' => $price,
-        ]);
-        return $purchasePrice->id;
-    }
-
     protected function createStockMutation(StockOperationData $data)
     {
 
@@ -161,6 +137,30 @@ class StockProduct extends Model implements ProductInterface
         }
 
         return $this->stockMutations()->create($insertArray);
+    }
+
+    public function getStockAttribute(): int
+    {
+        return $this->stock();
+    }
+
+    public function stock($date = null, $arguments = []): int
+    {
+        $date = $this->normalizeDate($date);
+        $mutations = $this->filterMutations($date, $arguments);
+
+        return (int)$mutations->sum('quantity');
+    }
+
+    public function createPurchase(StockSupplier $supplier, $price): int
+    {
+        $purchasePriceClass = config('stock.models.purchase_price');
+        $purchasePrice = $purchasePriceClass::create([
+            'product_id' => $this->id,
+            'supplier_id' => $supplier->id,
+            'price' => $price,
+        ]);
+        return $purchasePrice->id;
     }
 
     public function getLowStockThresholdAttribute(): int
