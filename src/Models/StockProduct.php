@@ -30,23 +30,12 @@ class StockProduct extends Model implements ProductInterface
     {
         try {
             $data->validate();
-            switch ($data->operation) {
-                case StockOperationType::purchase:
-                    $data->purchasePriceId = $this->createPurchase($data->supplier, $data->price);
-                    $this->increaseStock($data);
-                    break;
-                case StockOperationType::increase:
-                    $this->increaseStock($data);
-                    break;
-                case StockOperationType::decrease:
-                    $this->decreaseStock($data);
-                    break;
-                case StockOperationType::transfer:
-                    $this->transferStock($data);
-                    break;
-                default:
-                    throw new \InvalidArgumentException("Invalid operation type");
-            }
+            match ($data->operation) {
+                StockOperationType::purchase => $this->createPurchase($data),
+                StockOperationType::increase => $this->increaseStock($data),
+                StockOperationType::decrease => $this->decreaseStock($data),
+                StockOperationType::transfer => $this->transferStock($data),
+            };
         } catch (StockException $e) {
             fail($e->getMessage());
         }
@@ -60,7 +49,7 @@ class StockProduct extends Model implements ProductInterface
     /**
      * @throws StockException
      */
-    protected  function decreaseStock(StockOperationData $data): void
+    protected function decreaseStock(StockOperationData $data): void
     {
 
         if ($this->stock(null, ['warehouse' => $data->warehouseTo]) < $data->quantity) {
@@ -85,7 +74,7 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    protected  function transferStock(StockOperationData $data): void
+    protected function transferStock(StockOperationData $data): void
     {
         if ($this->stock(null, ['warehouse' => $data->warehouseFrom]) < $data->quantity) {
             throw new StockException('Not enough stock to transfer.');
@@ -116,15 +105,16 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    protected function createPurchase(StockSupplier $supplier, $price): int
+    protected function createPurchase(StockOperationData $data): void
     {
         $purchasePriceClass = config('stock.models.purchase_price');
         $purchasePrice = $purchasePriceClass::create([
             'product_id' => $this->id,
-            'supplier_id' => $supplier->id,
-            'price' => $price,
+            'supplier_id' => $data->supplier->id,
+            'price' => $data->price,
         ]);
-        return $purchasePrice->id;
+        $data->purchasePriceId = $purchasePrice->id;
+        $this->increaseStock($data);
     }
 
     protected function createStockMutation(StockOperationData $data): void
