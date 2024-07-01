@@ -82,7 +82,7 @@ class StockWarehouse extends Model implements WarehouseInterface
                 $currentStock[] = [
                     'quantity' => $mutation->quantity,
                     'purchase_price_id' => $mutation->purchase_price_id,
-                    'price' => $mutation->purchasePrice->price
+                    'price' => $mutation->purchasePrice ? $mutation->purchasePrice->price : 0,
                 ];
             } else {
                 $remainingQuantity = abs($mutation->quantity);
@@ -100,6 +100,28 @@ class StockWarehouse extends Model implements WarehouseInterface
                 }
             }
         }
-        return $currentStock;
+
+        $combinedStock = [];
+        foreach ($currentStock as $stock) {
+            $found = false;
+
+            foreach ($combinedStock as &$combined) {
+                if ($combined['purchase_price_id'] === $stock['purchase_price_id']) {
+                    $combined['quantity'] += $stock['quantity'];
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                $combinedStock[] = [
+                    'purchase_price_id' => $stock['purchase_price_id'],
+                    'quantity' => $stock['quantity'],
+                    'price' => $stock['price'],
+                ];
+            }
+        }
+
+        return $combinedStock;
     }
 }

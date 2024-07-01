@@ -99,6 +99,7 @@ class StockProduct extends Model implements ProductInterface
             $decreaseData->quantity = -$transferQuantity;
             $decreaseData->purchasePriceId = $mutation->purchase_price_id;
             $decreaseData->warehouseTo = $data->warehouseFrom;
+            $decreaseData->warehouseFrom = $data->warehouseTo;
             $this->createStockMutation($decreaseData);
 
             $remainingQuantity -= $transferQuantity;
@@ -115,6 +116,7 @@ class StockProduct extends Model implements ProductInterface
         ]);
         $data->purchasePriceId = $purchasePrice->id;
         $this->increaseStock($data);
+        $this->updateAveragePurchasePrice();
     }
 
     protected function createStockMutation(StockOperationData $data): void
@@ -123,10 +125,13 @@ class StockProduct extends Model implements ProductInterface
             'quantity' => $data->quantity,
             'type' => $this->determineMutationType($data->quantity, $data->warehouseFrom),
             'to_warehouse_id' => $data->warehouseTo->getId(),
-            'purchase_price_id' => $data->purchasePriceId,
             'stockable_id' => $this->id,
             'stockable_type' => self::class,
         ];
+
+        if($data->purchasePriceId) {
+            $insertArray['purchase_price_id'] = $data->purchasePriceId;
+        }
 
         if ($data->warehouseFrom) {
             $insertArray['from_warehouse_id'] = $data->warehouseFrom->getId();

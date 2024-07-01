@@ -13,7 +13,7 @@ class StockOperationData
     public StockOperationType $operation = StockOperationType::increase;
     public ?Model $reference = null;
     public ?StockSupplier $supplier = null;
-    public ?int $purchasePriceId;
+    public ?int $purchasePriceId = null;
     public float $price = 0;
     public int $quantity = 0;
     public string $description;
