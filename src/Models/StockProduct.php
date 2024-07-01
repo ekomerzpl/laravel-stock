@@ -26,6 +26,9 @@ class StockProduct extends Model implements ProductInterface
         return 1;
     }
 
+    /**
+     * @throws StockException
+     */
     public function manageStock(StockOperationData $data): void
     {
         try {
@@ -37,7 +40,7 @@ class StockProduct extends Model implements ProductInterface
                 StockOperationType::transfer => $this->transferStock($data),
             };
         } catch (StockException $e) {
-            fail($e->getMessage());
+            throw new StockException($e->getMessage());
         }
     }
 
@@ -51,7 +54,6 @@ class StockProduct extends Model implements ProductInterface
      */
     protected function decreaseStock(StockOperationData $data): void
     {
-
         if ($this->stock(null, ['warehouse' => $data->warehouseTo]) < $data->quantity) {
             throw new StockException('Not enough stock to decrease.');
         }
@@ -81,26 +83,31 @@ class StockProduct extends Model implements ProductInterface
         }
 
         $remainingQuantity = $data->quantity;
-        $mutations = $this->getTransferMutations($data->warehouseFrom);
+        $currentStock = $this->getCurrentStock($data->warehouseFrom);
 
-        foreach ($mutations as $mutation) {
+        foreach ($currentStock as $stock) {
             if ($remainingQuantity <= 0) break;
 
-            $transferQuantity = min($mutation->quantity, $remainingQuantity);
-            $data->quantity = $transferQuantity;
-            $data->purchasePriceId = $mutation->purchase_price_id;
+            $decreaseQuantity = min($stock['quantity'], $remainingQuantity);
+            $deductData = clone $data;
+            $insertData = clone $data;
+            $insertData->warehouseTo = $data->warehouseFrom;
+            $insertData->warehouseFrom = $data->warehouseTo;
+            $deductData->quantity = $decreaseQuantity;
+            $deductData->purchasePriceId = $stock['purchase_price_id'];
+            $this->createStockMutation($deductData);
 
-            $increaseData = clone($data);
-            $increaseData->warehouseTo = $data->warehouseTo;
-            $increaseData->warehouseFrom = $data->warehouseFrom;
-            $this->increaseStock($increaseData);
+            $insertData->quantity = -$decreaseQuantity;
+            $insertData->warehouseTo = $data->warehouseFrom;
+            $insertData->warehouseFrom = $data->warehouseTo;
+            $insertData->purchasePriceId = $stock['purchase_price_id'];
+            $this->createStockMutation($insertData);
 
-            $decreaseData = clone($data);
-            $decreaseData->warehouseTo = $data->warehouseFrom;
-            $decreaseData->warehouseFrom = $data->warehouseTo;
-            $this->decreaseStock($decreaseData);
+            $remainingQuantity -= $decreaseQuantity;
+        }
 
-            $remainingQuantity -= $transferQuantity;
+        if ($remainingQuantity > 0) {
+            throw new StockException('Not enough stock to decrease.');
         }
     }
 

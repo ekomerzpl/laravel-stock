@@ -9,14 +9,14 @@ use Illuminate\Database\Eloquent\Model;
 class StockOperationData
 {
     public ?WarehouseInterface $warehouseFrom = null;
-    public WarehouseInterface $warehouseTo;
+    public ?WarehouseInterface $warehouseTo;
     public StockOperationType $operation = StockOperationType::increase;
     public ?Model $reference = null;
     public ?StockSupplier $supplier = null;
+    public ?string $description = null;
     public ?int $purchasePriceId = null;
     public float $price = 0;
     public int $quantity = 0;
-    public string $description;
 
     public function validate(): void
     {

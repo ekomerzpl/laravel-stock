@@ -122,6 +122,6 @@ class StockWarehouse extends Model implements WarehouseInterface
             }
         }
 
-        return $combinedStock;
+        return $currentStock;
     }
 }
