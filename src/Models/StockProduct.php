@@ -52,9 +52,9 @@ class StockProduct extends Model implements ProductInterface
         }
     }
 
-    public function increaseStock(StockOperationData $data)
+    public function increaseStock(StockOperationData $data): void
     {
-        return $this->createStockMutation($data);
+        $this->createStockMutation($data);
     }
 
     /**
@@ -114,15 +114,10 @@ class StockProduct extends Model implements ProductInterface
 
             $remainingQuantity -= $transferQuantity;
         }
-
-        if ($remainingQuantity > 0) {
-            throw new StockException('Not enough stock to transfer.');
-        }
     }
 
-    protected function createStockMutation(StockOperationData $data)
+    protected function createStockMutation(StockOperationData $data): void
     {
-
         $insertArray = [
             'quantity' => $data->quantity,
             'type' => $this->determineMutationType($data->quantity, $data->warehouseFrom),
@@ -136,7 +131,7 @@ class StockProduct extends Model implements ProductInterface
             $insertArray['from_warehouse_id'] = $data->warehouseFrom->getId();
         }
 
-        return $this->stockMutations()->create($insertArray);
+        $this->stockMutations()->create($insertArray);
     }
 
     public function getStockAttribute(): int
